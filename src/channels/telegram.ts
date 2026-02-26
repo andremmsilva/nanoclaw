@@ -1,13 +1,74 @@
-import { Bot } from 'grammy';
+import { Bot, InlineKeyboard } from 'grammy';
 
 import { ASSISTANT_NAME, TRIGGER_PATTERN } from '../config.js';
 import { logger } from '../logger.js';
+import {
+  ALL_MODELS,
+  ANTHROPIC_MODELS,
+  ModelConfig,
+  OPENROUTER_MODELS,
+  readModelConfig,
+  writeModelConfig,
+} from '../model-config.js';
 import {
   Channel,
   OnChatMetadata,
   OnInboundMessage,
   RegisteredGroup,
 } from '../types.js';
+
+function buildModelKeyboard(config: ModelConfig): InlineKeyboard {
+  const kb = new InlineKeyboard();
+
+  kb.text('── Conversation model ──', 'mc:noop').row();
+  ANTHROPIC_MODELS.forEach((m) => {
+    const idx = ALL_MODELS.findIndex((x) => x.id === m.id);
+    const active = config.conversationModel.id === m.id;
+    kb.text(`${active ? '●' : '○'} ${m.name}`, `mc:c:${idx}`);
+  });
+  kb.row();
+  if (OPENROUTER_MODELS.length > 0) {
+    OPENROUTER_MODELS.forEach((m) => {
+      const idx = ALL_MODELS.findIndex((x) => x.id === m.id);
+      const active = config.conversationModel.id === m.id;
+      kb.text(`${active ? '●' : '○'} OR: ${m.name}`, `mc:c:${idx}`);
+    });
+    kb.row();
+  }
+
+  kb.text('── Scheduled task model ──', 'mc:noop').row();
+  ANTHROPIC_MODELS.forEach((m) => {
+    const idx = ALL_MODELS.findIndex((x) => x.id === m.id);
+    const active = config.cronModel.id === m.id;
+    kb.text(`${active ? '●' : '○'} ${m.name}`, `mc:t:${idx}`);
+  });
+  kb.row();
+  if (OPENROUTER_MODELS.length > 0) {
+    OPENROUTER_MODELS.forEach((m) => {
+      const idx = ALL_MODELS.findIndex((x) => x.id === m.id);
+      const active = config.cronModel.id === m.id;
+      kb.text(`${active ? '●' : '○'} OR: ${m.name}`, `mc:t:${idx}`);
+    });
+    kb.row();
+  }
+
+  return kb;
+}
+
+function buildModelStatusText(config: ModelConfig): string {
+  const provLabel = (m: (typeof ALL_MODELS)[0]) =>
+    m.provider === 'openrouter' ? ' via OpenRouter' : '';
+  const orHint =
+    OPENROUTER_MODELS.length === 0
+      ? '\n\n_Add OpenRouter models by editing_ `src/model-config.ts`'
+      : '';
+  return (
+    `🤖 *Model Settings*\n\n` +
+    `Conversation: *${config.conversationModel.name}*${provLabel(config.conversationModel)}\n` +
+    `Scheduled tasks: *${config.cronModel.name}*${provLabel(config.cronModel)}` +
+    orHint
+  );
+}
 
 export interface TelegramChannelOpts {
   onMessage: OnInboundMessage;
@@ -48,6 +109,54 @@ export class TelegramChannel implements Channel {
     // Command to check bot status
     this.bot.command('ping', (ctx) => {
       ctx.reply(`${ASSISTANT_NAME} is online.`);
+    });
+
+    // Model picker — shows inline keyboard to switch conversation/task model
+    this.bot.command('model', async (ctx) => {
+      const config = readModelConfig();
+      await ctx.reply(buildModelStatusText(config), {
+        parse_mode: 'Markdown',
+        reply_markup: buildModelKeyboard(config),
+      });
+    });
+
+    // Handle model selection button taps
+    this.bot.on('callback_query:data', async (ctx) => {
+      const data = ctx.callbackQuery.data;
+      if (!data.startsWith('mc:')) {
+        await ctx.answerCallbackQuery();
+        return;
+      }
+      if (data === 'mc:noop') {
+        await ctx.answerCallbackQuery();
+        return;
+      }
+      const parts = data.split(':');
+      const type = parts[1]; // 'c' = conversation, 't' = task
+      const idx = parseInt(parts[2], 10);
+      if (isNaN(idx) || idx < 0 || idx >= ALL_MODELS.length) {
+        await ctx.answerCallbackQuery('Unknown model');
+        return;
+      }
+      const model = ALL_MODELS[idx];
+      const config = readModelConfig();
+      if (type === 'c') {
+        config.conversationModel = model;
+      } else if (type === 't') {
+        config.cronModel = model;
+      }
+      writeModelConfig(config);
+      await ctx.answerCallbackQuery(
+        `${type === 'c' ? 'Conversation' : 'Task'} model → ${model.name}`,
+      );
+      try {
+        await ctx.editMessageText(buildModelStatusText(config), {
+          parse_mode: 'Markdown',
+          reply_markup: buildModelKeyboard(config),
+        });
+      } catch {
+        // Ignore if message content hasn't changed
+      }
     });
 
     this.bot.on('message:text', async (ctx) => {

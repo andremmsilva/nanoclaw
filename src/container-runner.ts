@@ -18,6 +18,7 @@ import {
 import { readEnvFile } from './env.js';
 import { resolveGroupFolderPath, resolveGroupIpcPath } from './group-folder.js';
 import { logger } from './logger.js';
+import { buildModelEnv, readModelConfig } from './model-config.js';
 import {
   CONTAINER_RUNTIME_BIN,
   readonlyMountArgs,
@@ -207,6 +208,7 @@ function readSecrets(): Record<string, string> {
   return readEnvFile([
     'CLAUDE_CODE_OAUTH_TOKEN',
     'ANTHROPIC_API_KEY',
+    'OPENROUTER_API_KEY',
     'GITHUB_TOKEN',
     'CALDAV_USERNAME',
     'CALDAV_PASSWORD',
@@ -300,7 +302,13 @@ export async function runContainerAgent(
     let stderrTruncated = false;
 
     // Pass secrets via stdin (never written to disk or mounted as files)
-    input.secrets = readSecrets();
+    const secrets = readSecrets();
+    const modelEnv = buildModelEnv(
+      readModelConfig(),
+      input.isScheduledTask ?? false,
+      secrets['OPENROUTER_API_KEY'],
+    );
+    input.secrets = { ...secrets, ...modelEnv };
     container.stdin.write(JSON.stringify(input));
     container.stdin.end();
     // Remove secrets from input so they don't appear in logs

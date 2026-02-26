@@ -6,6 +6,27 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 vi.mock('../config.js', () => ({
   ASSISTANT_NAME: 'Andy',
   TRIGGER_PATTERN: /^@Andy\b/i,
+  DATA_DIR: '/tmp/nanoclaw-test',
+}));
+
+// Mock model-config so tests don't touch the filesystem
+vi.mock('../model-config.js', () => ({
+  ANTHROPIC_MODELS: [
+    { id: 'claude-sonnet-4-6', name: 'Sonnet 4.6', provider: 'anthropic' },
+    { id: 'claude-opus-4-6', name: 'Opus 4.6', provider: 'anthropic' },
+    { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', provider: 'anthropic' },
+  ],
+  OPENROUTER_MODELS: [],
+  ALL_MODELS: [
+    { id: 'claude-sonnet-4-6', name: 'Sonnet 4.6', provider: 'anthropic' },
+    { id: 'claude-opus-4-6', name: 'Opus 4.6', provider: 'anthropic' },
+    { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', provider: 'anthropic' },
+  ],
+  readModelConfig: vi.fn(() => ({
+    conversationModel: { id: 'claude-sonnet-4-6', name: 'Sonnet 4.6', provider: 'anthropic' },
+    cronModel: { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', provider: 'anthropic' },
+  })),
+  writeModelConfig: vi.fn(),
 }));
 
 // Mock logger
@@ -25,6 +46,10 @@ type Handler = (...args: any[]) => any;
 const botRef = vi.hoisted(() => ({ current: null as any }));
 
 vi.mock('grammy', () => ({
+  InlineKeyboard: class MockInlineKeyboard {
+    text(_label: string, _data: string) { return this; }
+    row() { return this; }
+  },
   Bot: class MockBot {
     token: string;
     commandHandlers = new Map<string, Handler>();
