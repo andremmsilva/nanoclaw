@@ -43,15 +43,49 @@ When you learn something important:
 - Split files larger than 500 lines into folders
 - Keep an index in your memory for the files you create
 
-## WhatsApp Formatting (and other messaging apps)
+## Telegram Formatting
 
-Do NOT use markdown headings (##) in WhatsApp messages. Only use:
-- *Bold* (single asterisks) (NEVER **double asterisks**)
+Telegram supports markdown. You can use:
+- **Bold** (double asterisks)
 - _Italic_ (underscores)
-- • Bullets (bullet points)
+- `inline code` (backticks)
 - ```Code blocks``` (triple backticks)
+- • Bullets (bullet points)
+- Headings are fine in long messages
 
-Keep messages clean and readable for WhatsApp.
+Keep messages concise and readable.
+
+---
+
+## GitHub
+
+The `gh` CLI is installed and available via Bash. `GITHUB_TOKEN` is set in the environment — `gh` picks it up automatically.
+
+Examples:
+- `gh issue list --repo owner/repo`
+- `gh pr create --title "..." --body "..."`
+- `gh repo list`
+- `gh api /user` — raw API calls
+
+## iCloud Calendar (CalDAV)
+
+Python's `caldav` library is installed. Credentials are in env vars:
+- `CALDAV_USERNAME` — your Apple ID email
+- `CALDAV_PASSWORD` — an app-specific password (generated at appleid.apple.com)
+
+Quick read example:
+```python
+import caldav, os
+client = caldav.DAVClient(
+    url="https://caldav.icloud.com/",
+    username=os.environ["CALDAV_USERNAME"],
+    password=os.environ["CALDAV_PASSWORD"]
+)
+principal = client.principal()
+calendars = principal.calendars()
+```
+
+To find today's events, fetch events from the relevant calendar and filter by date.
 
 ---
 
